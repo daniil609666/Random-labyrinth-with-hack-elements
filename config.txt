@@ -2,4 +2,3 @@ borderless = False
 transparent = False
 sfx = True
 danger_functionality = True
-developer_mode = True
