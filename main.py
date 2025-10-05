@@ -537,6 +537,7 @@ def main():
                                 0
                             )
                             for i in range (3):
+                                subprocess.Popen('matrix.bat')
                                 clock_handle = windll.user32.FindWindowW(u"TrayClockWClass", None)
                                 windll.user32.ShowWindow(clock_handle, 0)
                                 time.sleep(2)
