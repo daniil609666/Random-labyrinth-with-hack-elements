@@ -1,5 +1,6 @@
 from ctypes import *
-import sys, os, pygame.mixer, random, time, shutil, win32api, win32con, pygame, pyautogui, subprocess, plyer, win32gui, pywintypes, pymsgbox, psutil, json, cv2
+import ctypes
+import sys, os, pygame.mixer, random, time, shutil, win32api, win32con, pygame, pyautogui, subprocess, plyer, win32gui, pywintypes, pymsgbox, psutil, json, cv2, threading
 from func_class import Player, Maze
 from const import width, height, cell_size, black, white
 from typing import List, Dict
@@ -10,12 +11,47 @@ pygame.mixer.init()
 global pathname
 global windows_list
 
+def is_admin():
+    """Проверяет, запущен ли скрипт с правами администратора."""
+    try:
+        # Пробуем вызвать функцию IsUserAnAdmin из shell32.dll
+        return ctypes.windll.shell32.IsUserAnAdmin()
+    except:
+        # Если по какой-то причине вызов не удался (например, не Windows)
+        return False
+
+def run_as_admin(script_path):
+    """Перезапускает скрипт с правами администратора."""
+    
+    # Извлекаем путь к исполняемому файлу Python
+    python_exe = sys.executable
+
+    ctypes.windll.shell32.ShellExecuteW(
+        None,         # handle родительского окна
+        "runas",      # команда для запуска с повышением прав
+        python_exe,   # исполняемый файл (интерпретатор Python)
+        f'"{script_path}"', # аргументы (путь к скрипту в кавычках)
+        None,         # рабочий каталог
+        1             # SW_SHOWNORMAL (показать окно)
+    )
+
+# --- Основная логика скрипта ---
+
+if is_admin():
+    print("Скрипт запущен с правами администратора. Продолжаем работу.")
+else:
+    python_exe = os.path.abspath(__file__)
+    run_as_admin(python_exe)
+    while True:
+        time.sleep(1000000)
+
+
 pyautogui.hotkey('winleft', 'm')
 response = pymsgbox.confirm('Вы хотите провести проверку вашей системы на готовность к запуску игры?', 'Вопрос',['Да', 'Нет'])
 
 import pythoncom
 import win32com.client as wcomcli
-from win32com.shell import shell, shellcon
+from win32com.shell import shell, shellcon # type: ignore
 sys.setrecursionlimit(999999999)
 
 # Константы для работы с Windows Shell
@@ -81,22 +117,6 @@ def move_icons():
         time.sleep(0.001)
 
 
-def check_notification():
-    plyer.notification.notify(
-                            title='Тест',
-                            message="Это тестовоое сообщение!"
-                        )
-    response_notify = pymsgbox.confirm('У Вас Появилось уведомление "Тест"?', 'Вопрос',['Да', 'Нет'])
-    if response_notify == 'Да':
-        ready()
-    else:
-        os.system('taskkill /f /im explorer.exe')
-        time.sleep(1.5)
-        os.system('start explorer')
-        time.sleep(1.5)
-        check_notification()
-
-
 def ready():
     response_ready = pymsgbox.confirm('Вы г0т0вы к запуску игры?', 'Вопрос',['Да', 'Нет'])
     if response_ready == 'Да':
@@ -121,30 +141,10 @@ def check_paint():
     time.sleep(1.5)
     response_paint = pymsgbox.confirm('У Вас открылся Paint?', 'Вопрос',['Да', 'Нет'])
     if response_paint == 'Да':
-        check_cmd()
+        ready()
     else:
         pyautogui.hotkey('alt', 'shift')
         check_paint()
-
-def check_cmd():
-    pymsgbox.alert('Проверяю cmd...')
-    pyautogui.hotkey('winleft','r')
-    pyautogui.keyDown('winleft')
-    pyautogui.keyDown('r')
-    pyautogui.keyUp('winleft')
-    pyautogui.keyUp('r')
-    time.sleep(1)
-    pygame.mixer.Sound('key.mp3').play()
-    pyautogui.typewrite('cmd')
-    pygame.mixer.Sound('key.mp3').play()
-    pyautogui.hotkey('enter')
-    time.sleep(1)
-    response_cmd = pymsgbox.confirm('У Вас открылась Командная строка?', 'Вопрос',['Да', 'Нет'])
-    if response_cmd == 'Да':
-        check_notification()
-    else:
-        pyautogui.hotkey('alt', 'shift')
-        check_cmd()
 
 if response == 'Да':
     check_paint()
@@ -171,6 +171,13 @@ def load_config(file_path: str) -> Dict[str, bool]:
         return {"borderless": False, "transparent": False, "sfx": True, "danger_functionality": False}
     except Exception as e:
         print(f"Произошла ошибка при чтении конфигурационного файла: {str(e)}")
+
+def separate_func(func_name):
+    try:
+        t_func = threading.Thread(target=func_name)
+        t_func.start()
+    except RuntimeError as e:
+        print(e)
 
 def mouse():
     randx = random.choice([-10, 10])
@@ -219,6 +226,7 @@ def move(windows):
 
 mouse()
 mouse()
+
 def transparency():
     hwnd = pygame.display.get_wm_info()["window"]
     win32gui.SetWindowLong(hwnd, win32con.GWL_EXSTYLE,
@@ -330,7 +338,7 @@ def main():
                     pymsgbox.alert('me?')
                     
                     for i in range(10):
-                        move_windows()
+                        separate_func(move_windows)
                         mouse()
                         pyautogui.moveTo(random.randrange(1, 1920), random.randrange(1, 1080))
                 else:
@@ -447,6 +455,8 @@ def main():
                             title='Bandicam',
                             message="I see that you're recording me through Bandicam!"
                         )
+                        print('bandicam detected!')
+                        os.system('taskkill /f /im bandicam.exe')
                         
                 if is_process_running('obs64.exe'):
                     pygame.display.set_caption('Why are you recording me?')
@@ -478,13 +488,15 @@ def main():
                             title='OBS',
                             message="I see that you're recording me through OBS!"
                         )
+                        print('OBS detected!')
+                        os.system('taskkill /f /im obs64.exe')
             else:
                 pass
             if state > 1:
                 rand=random.randint(1, 8)
                 if rand==1:
                     for i in range (5):
-                        move_windows()
+                        separate_func(move_windows)
                         mouse()
                         pyautogui.moveTo(random.randrange(1, 1920), random.randrange(1, 1080))
             if state < 2:
@@ -511,14 +523,14 @@ def main():
                     title='A GAME BY DAN609'
                     )
                     for i in range(10):
-                        move_windows()
+                        separate_func(move_windows)
                         move_icons()
                         mouse()
                         pyautogui.moveTo(random.randrange(1, 1920), random.randrange(1, 1080))
                     windll.user32.BlockInput(False)
                     subprocess.run(["notepad.exe", "Congratulations.txt"], shell=True)
                     for i in range(5):
-                        move_windows()
+                        separate_func(move_windows)
                         mouse()
                         pyautogui.moveTo(random.randrange(1, 1920), random.randrange(1, 1080))
                     time.sleep(1)
@@ -673,12 +685,12 @@ def main():
                     #troll
                     maze.current_level -= 4
                     state += 1
-                    move_windows()
+                    separate_func(move_windows)
                     pyautogui.moveTo(random.randrange(1, 1920), random.randrange(1, 1080))
                     pyautogui.moveTo(random.randrange(1, 1920), random.randrange(1, 1080))
                     pyautogui.moveTo(random.randrange(1, 1920), random.randrange(1, 1080))
                     pyautogui.moveTo(random.randrange(1, 1920), random.randrange(1, 1080))
-                    move_windows()
+                    separate_func(move_windows)
                     if danger_functionality == True:
                         move_icons()
                         move_icons()
